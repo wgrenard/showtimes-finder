@@ -70,70 +70,12 @@ def process_input():
     return urllib2.urlopen(url)  # Return info from the URL.
 
 
-
-def find_indicies_of(target_str, search_str):
-    """Return a list of indices where target_str occurs in search_str.
-
-    Args:
-        target_str (str) -- The string to be searched for.
-        search_str (str) -- The string to be searched through.
-    """
-
-    indicies = []  # Holds indeces to be returned
-    str_len = len(target_str)
-    i = 0  # Keeps track of where to start the search
-
-    while True:
-        index = search_str.find(target_str, i)
-
-        # Exit loop if str is not found.
-        if index == -1:
-            break
-
-        # If str is found, add it to indeces[] and change the starting point of
-        # the next search.
-        else:
-            indicies.append(index)
-            i = (index + str_len)
-
-    return indicies
-
-
-def split_at_string(trigger_str, str_to_split):
-    """Return a list of strings split from str_to_split at the indeces of trigger_str.
-
-    Args:
-        trigger_str (str) -- String at which splitting will occur.
-        str_to_split (str) -- String that is being split.
-
-    The location of each split is determined to be at the index specified by
-    trigger_str. E.g. split_at_string('b','abcdeabcde') returns ['bcdea', 'bcde']
-    """
-
-    # FIXME: Make this function simpler by just using string.split(seperator)
-
-    # Get a list of indices where splitting will occur.
-    indicies = find_indicies_of(trigger_str, str_to_split)
-    sub_strings = []  # This list will hold the split strings
-
-    # FIXME: Use a list comprehension or enumeration here.
-    for index in range(len(indicies)):
-
-        # Split from the last index to the end of the string.
-        if index == len(indicies) - 1:
-            sub_strings.append(str_to_split[indicies[index]:])
-
-        # Split from current index to the next index.
-        else:
-            sub_strings.append(str_to_split[indicies[index]:indicies[index + 1]])
-
-    return sub_strings
-
-
-def pull_theater_titles():
+def pull_theater_titles(html):
     """Return a list of available theater titles from the html in theaters list."""
 
     title_list = []  # List to hold theater titles.
+    # Split the html into a list whose elements each have info on only one theater.
+    theaters = html.split('showtimes-theater-title')[1:]
 
     # FIXME: Use a list comprehension or enumeration here. Avoid global vars use.
     for index in range(len(theaters)):
@@ -144,10 +86,10 @@ def pull_theater_titles():
             title_str = ' '.join(temp_list[2:])
             title_list.append(title_str)
 
-    return title_list
+    return (theaters, title_list)
 
 
-def pull_movie_titles():
+def pull_movie_titles(theaters):
     """Return a list of movie titles for each theater.
 
     The list returned is a list of lists. The inner lists are filled with the
@@ -156,10 +98,15 @@ def pull_movie_titles():
 
     inner_list = []  # List to temporarily hold movie titles from one single theater
     title_list = []  # List to hold inner lists.
+    movies = []
+
+    # Loop through the theater strings and split each string by movie.
+    for theater in theaters:
+        movies.append(theater.split('showtimes-movie-container')[1:])
 
     # Here the outer loop goes through the movies list, and inner loop goes
     # through the strings of each element in the movies list.
-    # FIXME: Use list comprehension or enumeration. Remove global vars use.
+    # FIXME: Use list comprehension or enumeration.
     for i in range(len(movies)):
         for j in range(len(movies[i])):
             # If there are movies to display, then add them to the list
@@ -178,7 +125,7 @@ def pull_movie_titles():
 
         inner_list = []
 
-    return title_list
+    return (movies, title_list)
 
 
 def determine_showtimes(search_str):
@@ -213,11 +160,8 @@ def determine_showtimes(search_str):
     return showtimes_list
 
 
-def present_showtimes():
+def present_showtimes(theater_titles, movie_titles, movies):
     """Present the theaters, movies, and showtimes in a formatted manner."""
-    # FIXME: Remove dependence on global vars.
-    theater_titles = pull_theater_titles()
-    movie_titles = pull_movie_titles()
 
     # FIXME: Use list comprehensions or enumerations.
     for i in range(len(theater_titles)):
@@ -232,34 +176,39 @@ def present_showtimes():
             print ''
 
 
-def is_url_valid():
+def is_url_valid(html):
     """Return true if url was found. Return false if not."""
     # FIXME: Does this really need to be a function?
     return html.find("This location can't be found.") == -1
 
 
-present_instructions()
-response = ''
-html = ''
+def run_showtimes_finder():
+    """Run the showtimes_finder program."""
+    present_instructions()
+    response = ''
+    html = ''
 
-while True:
-    response = process_input()
-    html = response.read()  # Read information from the URL
+    while True:
+        response = process_input()
+        html = response.read()  # Read information from the URL
 
-    if is_url_valid():
-        break
-    else:
-        print("\nThe location you entered cannot be found. Please check that "
-              "your location was spelled correctly and entered in the correct "
-              "format")
+        if is_url_valid(html):
+            break
+        else:
+            print("\nThe location you entered cannot be found. Please check that "
+                  "your location was spelled correctly and entered in the correct "
+                  "format")
 
-# Split the html into a list whose elements each have info on only one theater.
-theaters = split_at_string('showtimes-theater-title', html)
-movies = []
+    theaters = pull_theater_titles(html)[0]
+    theater_titles = pull_theater_titles(html)[1]
+    movies = pull_movie_titles(theaters)[0]
+    movie_titles = pull_movie_titles(theaters)[1]
 
-# Loop through the theater strings and split each string by movie.
-for theater in theaters:
-    movies.append(split_at_string('showtimes-movie-container', theater))
 
-present_showtimes()
-response.close()        #close the urllib2 connection file
+    present_showtimes(theater_titles, movie_titles, movies)
+    response.close()        #close the urllib2 connection file
+
+
+if __name__ == "__main__":
+    run_showtimes_finder()
+
