@@ -9,6 +9,82 @@ import urllib2
 import time
 
 
+class Theater(object):
+    """Holds information for a theater, including its title and movie titles.
+
+    Attributes:
+        theater_info (str) -- Raw html that contains all information about the
+                              theater.
+        title (str) -- The title of the theater, pulled from theater_info.
+        movies (list) -- A list of Movie objects, one for each movie that is
+                         playing at the theater.
+    """
+
+    def __init__(self, theater_info):
+        self.theater_info = theater_info
+        self.title = self.pull_theater_title()
+        self.movies = self.pull_movies()
+
+    def pull_theater_title(self):
+        """Return the title of the theater from the theater_info string."""
+
+        # Split the theater string between '>' and
+        # '</a>' where the title is located.
+        title = self.theater_info.split('</a>', 1)[0].split('>', 1)[1].strip()
+        return title
+
+    def pull_movies(self):
+        """Return a list of Movie objects, one for each movie at the theater."""
+
+        # Split the theater_info list by movie.
+        movie_info = self.theater_info.split('showtimes-movie-container')[1:]
+        movies = [Movie(info) for info in movie_info]
+
+        return movies
+
+
+class Movie(object):
+    """Holds information for a movie, including its title and showtimes.
+
+    Attributes:
+        movie_info (str) -- Raw html that contains all information about the
+                            movie.
+        title (str) -- The title of the movie.
+        showtimes (list) -- A list of strings giving showtimes for the movie.
+    """
+
+    def __init__(self, movie_info):
+        self.movie_info = movie_info
+        self.title = self.pull_movie_title()
+        self.showtimes = self.pull_showtimes()
+
+    def pull_movie_title(self):
+        """Return the title of the movie from the movie_info string."""
+
+        # Split each move_list to get movie titles, if there are movies playing.
+        if 'there are no movies' not in self.movie_info:
+            leading_chars = self.movie_info.split('showtimes and tickets', 1)[0]
+            title = leading_chars.split('alt="', 1)[1].strip()
+            return title
+        else:
+            return "There are no movies playing at this theater."
+
+    def pull_showtimes(self):
+        """Return a list of showtimes for this movie."""
+
+        # Split the movie_info by info on the showtimes.
+        showtimes_info = self.movie_info.split('</time>')[:-1]
+
+        # Pull the actual showtimes from the html.
+        if 'there are no movies' not in self.movie_info:
+            showtimes = [showtime[-6:] if showtime[-7] == '>'
+                         else showtime[-7:]
+                         for showtime in showtimes_info]
+            return showtimes
+        else:
+            return ["There are no showtimes for this theater."]
+
+
 def present_instructions():
     """Print instructions on how to use the program"""
 
@@ -28,12 +104,12 @@ def process_input():
         # Split the location input
         location_list = location.split()
 
-        # Only creat city string if there is at least a city and state entered
+        # Only create city string if there is at least a city and state entered.
         if len(location_list) >= 2:
             city = '+'.join(location_list[:len(location_list) - 1])
             break
         else:
-            print ("\nIncorrect format. Please check that you entered the"
+            print ("\nIncorrect format. Please check that you entered the "
                    "location in City ST format and that you included both a city"
                    "and a state.")
 
@@ -68,126 +144,23 @@ def process_input():
     return urllib2.urlopen(url)  # Return info from the URL.
 
 
-def split_html(html):
-    """Return a tuple containing three lists, with theater, movie, and showtime info.
-
-    Args:
-        html (str) -- The text html code containing the showitmes information.
-
-    The first element of the tuple is a list of strings, each containing
-    information for a different theater. The second element is a list of lists.
-    Each inner list corresponds to a theater, whose list elements are strings
-    containing information about each movie playing at that theater. Finally,
-    the third element is a 3 dimensional list, at its deepest level containing
-    information for each showtime for a given movie at a given theater.
-    """
-
-    # Split the html by theater.
-    theater_info = html.split('showtimes-theater-title')[1:]
-
-    # Split each theather text by movie.
-    movie_info = [theater.split('showtimes-movie-container')[1:] for theater in theater_info]
-
-    # Split each movie for a given theater by showtimes.
-    showtimes_info = []
-
-    for movie_list in movie_info:
-        temp_list = [movie.split('</time>')[:-1] for movie in movie_list]
-        showtimes_info.append(temp_list)
-
-    """
-    showtimes_info = [movie.split('</time>')[:-1]
-                      for movie_list in movie_info
-                      for movie in movie_list]
-    """
-    return (theater_info, movie_info, showtimes_info)
-
-
-def pull_theater_titles(theater_info):
-    """Return a list of available theater titles from the theater info list.
-
-    Args:
-        theater_info (list) -- Each element is a string with information about
-                               a different theater.
-    """
-
-    # Split each theater string between '</a>' and '>' where the time is located
-    # if there are movies playing.
-    title_list = [theater.split('</a>', 1)[0].split('>', 1)[1].strip()
-                  for theater in theater_info
-                  if 'there are no movies' not in theater]
-
-    return title_list
-
-
-def pull_movie_titles(movie_info):
-    """Return a list containing lists of movie titles for each theater.
-
-    Args:
-        movie_info (list) -- Each element is a list which contains information
-                             on all movies for a given theater.
-
-    The list returned is a list of lists. The inner lists are filled with the
-    movie titles. Each inner list contains the titles of movies for a different
-    theater.
-    """
-
-    title_list = []
-
-    # Each movie_list holds the movie info for a different theater.
-    for movie_list in movie_info:
-        # Split each move_list to get movie titles, if there are movies playing.
-        inner_list = [movie.split('showtimes and tickets', 1)[0].split('alt="', 1)[1].strip()
-                      for movie in movie_list
-                      if 'there are no movies' not in movie]
-        title_list.append(inner_list)
-
-    return title_list
-
-
-def pull_showtimes(showtimes_info):
-    """Return a 3 dimensional list containing showtimes by movie and theater.
-
-    Args:
-        showtimes_info (list) -- A 3 dimensional list of information on showtimes
-                                 by movie and theater.
-
-    The list returned is a 3 dimensional list. The innermost list contains
-    showtimes, for a given movie at a given theater.
-    """
-
-    showtimes_list = []
-    theater_list = []
-
-    for movie_list in showtimes_info:
-        for movie in movie_list:
-            times = [showtime[-6:] if showtime[-7] == '>'
-                     else showtime[-7:]
-                     for showtime in movie]
-            theater_list.append(times)
-        showtimes_list.append(theater_list)
-
-    return showtimes_list
-
-
-def present_showtimes(theater_titles, movie_titles, showtimes):
+def present_showtimes(theaters):
     """Present the theaters, movies, and showtimes, in a formatted manner.
 
     Args:
-        theater_titles (list) -- A list of theater titles.
-        movie_titles (list) -- A 2 dimensional list of movie titles separated by theater.
-        showtimes (list) -- A 3 dimensional list of showtimes separated by movie
-                            and theater
+        theaters (list) -- Contains a theater object for each theater that is
+                           playing movies.
     """
 
-    for (theater, theater_title) in enumerate(theater_titles):
-        print '\nTheater: ' + theater_title + '\n'
+    for theater in theaters:
+        print '\nTheater: ' + theater.title
 
-        for (movie, movie_title) in enumerate(movie_titles[theater]):
-            print '  Movie: ' + movie_title
+        for movie in theater.movies:
+            print '  Movie: ' + movie.title
 
-            for showtime in showtimes[theater][movie]:
+            for showtime in movie.showtimes:
                 print '         ' + showtime
+
             print ''
 
 
@@ -199,8 +172,8 @@ def run_showtimes_finder():
     html = ''
 
     while True:
-        response = process_input()
-        html = response.read()  # Read information from the URL
+        response = process_input()  # Get the proper URL based upon user input.
+        html = response.read()      # Read information from the URL
 
         # If the html is valid, then program execution can continue.
         if html.find("This location can't be found.") == -1:
@@ -210,17 +183,15 @@ def run_showtimes_finder():
                   "your location was spelled correctly and entered in the correct "
                   "format")
 
-    # Split the html by where theater, movie, and showtimes info is located.
-    theater_info, movie_info, showtimes_info = split_html(html)
+    # Split html such that each piece has information for one theater only.
+    theater_info = html.split('showtimes-theater-title')[1:]
 
-    # Pull the titles and showtimes from the respective chunks of html text.
-    theater_titles = pull_theater_titles(theater_info)
-    movie_titles = pull_movie_titles(movie_info)
-    showtimes = pull_showtimes(showtimes_info)
+    # Create a list of theaters from the information in the html.
+    theaters = [Theater(info) for info in theater_info]
 
-    present_showtimes(theater_titles, movie_titles, showtimes)
+    present_showtimes(theaters)
+
     response.close()        #close the urllib2 connection file
-
 
 if __name__ == "__main__":
     run_showtimes_finder()
