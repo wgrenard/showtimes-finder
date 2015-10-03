@@ -5,93 +5,85 @@ information is queried from http://www.fandango.com. The theaters, movies, and
 showtimes information available there is then presented in an organized manner.
 """
 
+from __future__ import print_function
 import urllib2
 import time
 
+class NoMoviesPlayingError(Exception):
+    pass
 
 class Theater(object):
     """Holds information for a theater, including its title and movie titles.
 
     Attributes:
-        theater_info (str) -- Raw html that contains all information about the
-                              theater.
         title (str) -- The title of the theater, pulled from theater_info.
         movies (list) -- A list of Movie objects, one for each movie that is
                          playing at the theater.
     """
 
     def __init__(self, theater_info):
-        self.theater_info = theater_info
-        self.title = self.pull_theater_title()
-        self.movies = self.pull_movies()
+        """Set the title of the theater, and a list of Movies playing at it.
 
-    def pull_theater_title(self):
-        """Return the title of the theater from the theater_info string."""
+        Args:
+            theater_info (str) -- Raw html that contains all information about
+                                  the theater.
+        """
 
-        # Split the theater string between '>' and
-        # '</a>' where the title is located.
-        title = self.theater_info.split('</a>', 1)[0].split('>', 1)[1].strip()
-        return title
+        self.title = theater_info.split('</a>', 1)[0].split('>', 1)[1].strip()
 
-    def pull_movies(self):
-        """Return a list of Movie objects, one for each movie at the theater."""
+        # Split the theater_info string by movie.
+        movie_info = theater_info.split('showtimes-movie-container')[1:]
 
-        # Split the theater_info list by movie.
-        movie_info = self.theater_info.split('showtimes-movie-container')[1:]
-        movies = [Movie(info) for info in movie_info]
-
-        return movies
+        # Create a list of Movie objects, to represent movies playing. If no
+        # movies are playing for this theater, create an empty list instead.
+        try:
+            self.movies = [Movie(info) for info in movie_info]
+        except NoMoviesPlayingError:
+            self.movies = []
 
 
 class Movie(object):
     """Holds information for a movie, including its title and showtimes.
 
     Attributes:
-        movie_info (str) -- Raw html that contains all information about the
-                            movie.
         title (str) -- The title of the movie.
         showtimes (list) -- A list of strings giving showtimes for the movie.
     """
 
     def __init__(self, movie_info):
-        self.movie_info = movie_info
-        self.title = self.pull_movie_title()
-        self.showtimes = self.pull_showtimes()
+        """Set the movie title and movie showtimes if there is a movie playing.
 
-    def pull_movie_title(self):
-        """Return the title of the movie from the movie_info string."""
+        If there is no movie playing, then a NoMoviesPlayingError is thrown
+        instead of setting the Movie object's attributes.
 
-        # Split each move_list to get movie titles, if there are movies playing.
-        if 'there are no movies' not in self.movie_info:
-            leading_chars = self.movie_info.split('showtimes and tickets', 1)[0]
-            title = leading_chars.split('alt="', 1)[1].strip()
-            return title
+        Args:
+            movie_info (str) -- Raw html that contains all information about the
+                                movie.
+        """
+
+        if 'there are no movies' not in movie_info:
+            leading_chars = movie_info.split('showtimes and tickets', 1)[0]
+            self.title = leading_chars.split('alt="', 1)[1].strip()
+
+            # Split the movie_info by info on the showtimes.
+            showtimes_info = movie_info.split('</time>')[:-1]
+
+            # Pull the actual showtimes from the html.
+            self.showtimes = [showtime[-6:] if showtime[-7] == '>'
+                              else showtime[-7:]
+                              for showtime in showtimes_info]
+
         else:
-            return "There are no movies playing at this theater."
-
-    def pull_showtimes(self):
-        """Return a list of showtimes for this movie."""
-
-        # Split the movie_info by info on the showtimes.
-        showtimes_info = self.movie_info.split('</time>')[:-1]
-
-        # Pull the actual showtimes from the html.
-        if 'there are no movies' not in self.movie_info:
-            showtimes = [showtime[-6:] if showtime[-7] == '>'
-                         else showtime[-7:]
-                         for showtime in showtimes_info]
-            return showtimes
-        else:
-            return ["There are no showtimes for this theater."]
+            raise NoMoviesPlayingError("There are no movies playing at this theater.")
 
 
 def present_instructions():
     """Print instructions on how to use the program"""
 
-    print "\n\nWelcome to the movie showtimes generator!"
-    print "Please enter the city and state where you wish to find movie times."
-    print "Then enter the date which you are interested in."
-    print "The movie showtimes generator will then return all theaters and showtimes in your area."
+    print("\n\nWelcome to the movie showtimes generator!")
+    print("Please enter the city and state where you wish to find movie times.")
+    print("Then enter the date which you are interested in.")
+    print("The movie showtimes generator will then return all theaters and showtimes in your area.")
 
 
 def process_input():
@@ -109,9 +101,9 @@ def process_input():
             city = '+'.join(location_list[:len(location_list) - 1])
             break
         else:
-            print ("\nIncorrect format. Please check that you entered the "
-                   "location in City ST format and that you included both a city"
-                   "and a state.")
+            print("\nIncorrect format. Please check that you entered the "
+                  "location in City ST format and that you included both a city"
+                  "and a state.")
 
     # Gather date info and account for errors.
     while True:
@@ -148,20 +140,22 @@ def present_showtimes(theaters):
     """Present the theaters, movies, and showtimes, in a formatted manner.
 
     Args:
-        theaters (list) -- Contains a theater object for each theater that is
-                           playing movies.
+        theaters (list) -- Contains a theater object for each theater found.
     """
 
     for theater in theaters:
-        print '\nTheater: ' + theater.title
+        print('\nTheater: ' + theater.title)
 
-        for movie in theater.movies:
-            print '  Movie: ' + movie.title
+        if not theater.movies:
+            print('There are no movies playing at this theater.')
+        else:
+            for movie in theater.movies:
+                print('Movie: ' + movie.title)
 
-            for showtime in movie.showtimes:
-                print '         ' + showtime
+                for showtime in movie.showtimes:
+                    print('{:>10}'.format(showtime))
 
-            print ''
+                print()
 
 
 def run_showtimes_finder():
